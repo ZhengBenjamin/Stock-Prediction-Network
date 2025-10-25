@@ -10,17 +10,16 @@ from .download_data import DownloadData
 from typing import List, Optional, LiteralString
 
 class StockPreprocessor:
-    def __init__(self, data_dir: Optional[str] = "data", test_size: Optional[float] = 0.2, sequence_length: Optional[int] = 10):
+    def __init__(self, data_dir: Optional[str] = "data", sequence_length: Optional[int] = 1000):
         self.downloader = DownloadData()
         self.data_dir = data_dir
-        self.test_size = test_size
         self.sequence_length = sequence_length
         self._ensure_data()
 
     def parse_data(self) -> np.array:
         """Parses each CSV file into a list of np.array
         Excludes attr labels + timestamps
-        Limits to 1000 data points per stock
+        Limits to sequence_length data points per stock
         Returns np.array(stock, stock_examples, attributes)"""
 
         stock_data = []
@@ -55,10 +54,10 @@ class StockPreprocessor:
         df = pd.read_csv(file)
         data = df.iloc[:, 1:].replace('', np.nan).to_numpy(dtype=np.float64)
 
-        if np.isnan(data).any() or data.shape[0] < 1000:
+        if np.isnan(data).any() or data.shape[0] < self.sequence_length:
             return None
         
-        data = data[:1000, :]
+        data = data[:self.sequence_length, :]
 
         return data
 

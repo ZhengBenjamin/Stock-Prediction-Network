@@ -12,7 +12,7 @@ class Trainer:
     def __init__(self, 
                  hidden_size: Optional[int] = 64, 
                  num_layers: Optional[int] = 2, 
-                 dropout: Optional[int] = 0.2,
+                 dropout: Optional[float] = 0.2,
                  sequence_length: Optional[int] = 1000,
                  batch_size: Optional[int] = 32,
                  lr: Optional[float] = 0.001):

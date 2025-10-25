@@ -15,7 +15,11 @@ class DownloadData:
         path = kagglehub.dataset_download("paultimothymooney/stock-market-data")
         print("Path to dataset files:", path)
 
-        sp500_path = os.path.join(os.getcwd(), "data\\datasets\\paultimothymooney\\stock-market-data\\versions\\74\\stock_market_data\\sp500\\csv")
+        sp500_path = os.path.join(
+            os.getcwd(),
+            "data", "datasets", "paultimothymooney", "stock-market-data",
+            "versions", "74", "stock_market_data", "sp500", "csv"
+        )
 
         # Only keep sp500 data
         print("Moving necessary files to data directory...")

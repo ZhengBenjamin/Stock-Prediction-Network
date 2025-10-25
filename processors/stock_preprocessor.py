@@ -20,7 +20,8 @@ class StockPreprocessor:
     def parse_data(self) -> np.array:
         """Parses each CSV file into a list of np.array
         Excludes attr labels + timestamps
-        Limits to 1000 data points per stock"""
+        Limits to 1000 data points per stock
+        Returns np.array(stock, stock_examples, attributes)"""
 
         stock_data = []
 
@@ -33,27 +34,18 @@ class StockPreprocessor:
         return np.array(stock_data)
     
     def normalize(self, stock_data: np.array) -> np.array:
-        """Normalizes data matrix """
+        """Normalizes data matrix"""
 
-        attr_dict = defaultdict(list) # attr_index : List[attr_vals]
-        normalized_attr_dict = dict()  # attr_index : List[norm_attr_vals]
+        normalized_data = np.zeros_like(stock_data)
+        num_features = stock_data.shape[2]
 
-        # Convert data into attr_dict
-        for stock in stock_data:
-            for data_pt in stock:
-                for attr_index, attr_val in enumerate(data_pt):
-                    attr_dict[attr_index].append(attr_val)
-
-        # Normalize
-        for attr_index, attr_val_list in attr_dict.items():
-            attr_val_list = np.array(attr_val_list)
+        for feature_idx in range(num_features):
+            feature_vals = stock_data[:, :, feature_idx].reshape(-1, 1)
             scaler = MinMaxScaler()
-            normalized_attr_dict[attr_index] = scaler.fit_transform(attr_val_list.reshape(-1, 1))
+            normalized_feature = scaler.fit_transform(feature_vals).reshape(stock_data.shape[0], stock_data.shape[1])
+            normalized_data[:, :, feature_idx] = normalized_feature
 
-        
-        
-            
-        
+        return normalized_data
         
     def get_data_arr(self, file: str) -> np.array:
         """Takes file and converts to numpy array without timestamps, 

@@ -1,6 +1,8 @@
-from StockPreprocessor import StockPreprocessor
+from processors import *
 
 preprocessor = StockPreprocessor()
-train_data, test_data = preprocessor.preprocess_all()
-
-print(train_data, test_data)
+# preprocessor.parse_data()
+# print(preprocessor.get_data_arr('A.csv').shape)
+x = preprocessor.parse_data()
+y = preprocessor.normalize(x)
+# preprocessor.get_data_arr('A.csv')

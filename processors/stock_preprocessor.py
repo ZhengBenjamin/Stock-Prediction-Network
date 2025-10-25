@@ -72,7 +72,7 @@ class StockPreprocessor:
         else:
             print("Data found.")
 
-    def _get_path(self, file: str) -> LiteralString:
+    def _get_path(self, file: str) -> str:
         """Returns path of file"""
         return os.path.join(self.data_dir, file)
     

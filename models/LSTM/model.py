@@ -6,7 +6,7 @@ from typing import Optional, List
 
 class Model(nn.Module):
 
-    def __init__(self, input_size: int, hidden_size: Optional[int] = 64, num_layers: Optional[int] = 2, dropout: Optional[int] = 0.2):
+    def __init__(self, input_size: int, hidden_size: Optional[int] = 64, num_layers: Optional[int] = 2, dropout: Optional[float] = 0.2):
         
         super().__init__()
         self.hidden_size = hidden_size

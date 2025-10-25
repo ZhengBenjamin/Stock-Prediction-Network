@@ -1,9 +1,13 @@
 import torch
+import numpy as np
+
 from torch.utils.data import Dataset, DataLoader
+from typing import Optional, List
 
-class Dataloader:
+class StockDataloader(Dataset):
+    """Needed for DataLoader in trainer.py"""
 
-    def __init__(self, X, y):
+    def __init__(self, X: np.ndarray, y: np.ndarray):
         self.X = torch.tensor(X, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.float32).unsqueeze(1)
 

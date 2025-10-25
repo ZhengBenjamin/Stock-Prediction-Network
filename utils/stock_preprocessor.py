@@ -14,9 +14,21 @@ class StockPreprocessor:
         self.downloader = DownloadData()
         self.data_dir = data_dir
         self.sequence_length = sequence_length
+        self.normalized_data = None
         self._ensure_data()
 
-    def parse_data(self) -> np.array:
+    def get_normalized_data(self) -> np.ndarray:
+        """Gets normalized data directly"""
+
+        if self.normalized_data is not None:
+            return self.normalized_data
+        
+        data = self.parse_data()
+        normalized_data = self.normalize(data)
+        self.normalized_data = normalized_data
+        return normalized_data
+
+    def parse_data(self) -> np.ndarray:
         """Parses each CSV file into a list of np.array
         Excludes attr labels + timestamps
         Limits to sequence_length data points per stock
@@ -32,7 +44,15 @@ class StockPreprocessor:
         
         return np.array(stock_data)
     
-    def normalize(self, stock_data: np.array) -> np.array:
+    def get_close_val(self, stock_idx: int, time_idx: int) -> float:
+        """Gets the close value of a particular stock at a particular time index"""
+        
+        if self.normalized_data is None:
+            self.get_normalized_data()
+        
+        return self.normalized_data[stock_idx, time_idx, 4]
+    
+    def normalize(self, stock_data: np.ndarray) -> np.ndarray:
         """Normalizes data matrix"""
 
         normalized_data = np.zeros_like(stock_data)

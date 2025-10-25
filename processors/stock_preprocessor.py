@@ -47,7 +47,7 @@ class StockPreprocessor:
 
         return normalized_data
         
-    def get_data_arr(self, file: str) -> np.array:
+    def get_data_arr(self, file: str) -> Optional[np.ndarray]:
         """Takes file and converts to numpy array without timestamps, 
         returns None if there is missing data"""
 

@@ -10,3 +10,4 @@ from models import *
 
 trainer = Trainer()
 trainer.train(1000)
+trainer.run_benchmark() 

@@ -43,3 +43,20 @@ Thumbs.db
 
 # Dataset folder
 data/
+
+# LaTeX compile files
+*.aux
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.log
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+*.nav
+*.snm
+*.vrb
+*.xdv

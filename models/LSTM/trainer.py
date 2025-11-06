@@ -4,6 +4,7 @@ from .model import *
 from .stock_dataloader import *
 from utils.stock_preprocessor import StockPreprocessor
 from torch.utils.data import DataLoader
+from benchmark import ModelBenchmark
 
 from typing import Optional, List
 
@@ -53,6 +54,36 @@ class Trainer:
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}, Loss: {loss/len(self.loader):.6f}")
 
+
+    def run_benchmark(self, plot: bool = True, save_plots: bool = True):
+            """
+            Run comprehensive benchmark evaluation.
+            
+            Args:
+                plot: Whether to generate and show plots
+                save_plots: Whether to save plots to files
+            """
+            print("\n" + "="*70)
+            print("RUNNING BENCHMARK EVALUATION")
+            print("="*70)
+            
+            # Run evaluation
+            results = self.benchmark.evaluate(
+                X=self.X,
+                y=self.y,
+                train_ratio=0.7,
+                val_ratio=0.15
+            )
+            
+            # Print metrics
+            self.benchmark.print_metrics()
+            
+            # Generate plots
+            if plot:
+                self.benchmark.plot_predictions(max_points=500)
+                self.benchmark.plot_residuals()
+            
+            return results
     def _prepare_data(self):
         data = self.preprocessor.get_normalized_data()
         X = data[:, :-1, :]  # All but last time step

@@ -1,22 +1,28 @@
-import numpy as np
+"""LSTM model trainer for stock price prediction."""
 
-from .model import *
-from .stock_dataloader import *
+import numpy as np
+import torch
+
+from .model import Model
+from .stock_dataloader import StockDataloader
 from utils.stock_preprocessor import StockPreprocessor
 from torch.utils.data import DataLoader
+from typing import Optional, Tuple
 
-from typing import Optional, List
 
 class Trainer:
-    
-    def __init__(self, 
-                 hidden_size: Optional[int] = 64, 
-                 num_layers: Optional[int] = 2, 
-                 dropout: Optional[float] = 0.2,
-                 sequence_length: Optional[int] = 1000,
-                 batch_size: Optional[int] = 32,
-                 lr: Optional[float] = 0.001):
-        
+    """Trainer class for the LSTM model."""
+
+    def __init__(
+        self,
+        hidden_size: Optional[int] = 64,
+        num_layers: Optional[int] = 2,
+        dropout: Optional[float] = 0.2,
+        sequence_length: Optional[int] = 1000,
+        batch_size: Optional[int] = 32,
+        lr: Optional[float] = 0.001
+    ):
+        """Initialize the trainer with model parameters."""
         self.preprocessor = StockPreprocessor(sequence_length=sequence_length)
         self.lr = lr
 
@@ -26,9 +32,16 @@ class Trainer:
         self.data = StockDataloader(self.X, self.y)
         self.loader = DataLoader(self.data, batch_size, shuffle=True)
 
-        self.device = torch.device("cuda")
+        # Set device to CUDA if available, else CPU
+        self.device = (
+            torch.device("cuda") if torch.cuda.is_available()
+            else torch.device("cpu")
+        )
 
-        self.model = Model(self.X.shape[2], hidden_size, num_layers, dropout).to(self.device)
+        # Initialize model and move to device
+        self.model = Model(
+            self.X.shape[2], hidden_size, num_layers, dropout
+        ).to(self.device)
 
     def train(self, epochs: Optional[int] = 10000):
         
@@ -40,7 +53,9 @@ class Trainer:
             optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
             for X_batch, y_batch in self.loader:
-                X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+                # Move batch data to the appropriate device
+                X_batch = X_batch.to(self.device)
+                y_batch = y_batch.to(self.device)
 
                 optimizer.zero_grad()
                 outputs = self.model(X_batch)
@@ -50,10 +65,11 @@ class Trainer:
 
                 loss += loss.item()
             
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch}, Loss: {loss/len(self.loader):.6f}")
+            # if epoch % 100 == 0:
+            print(f"Epoch {epoch}, Loss: {loss/len(self.loader):.6f}")
 
-    def _prepare_data(self):
+    def _prepare_data(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Prepare and normalize training data."""
         data = self.preprocessor.get_normalized_data()
         X = data[:, :-1, :]  # All but last time step
         y = data[:, 1:, 4]   # Close price at next time step

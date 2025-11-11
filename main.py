@@ -1,12 +1,43 @@
-from utils import *
-from models import *
+import argparse
 
-# preprocessor = StockPreprocessor()
-# preprocessor.parse_data()
-# print(preprocessor.get_data_arr('A.csv').shape)
-# x = preprocessor.parse_data()
-# y = preprocessor.normalize(x)
-# preprocessor.get_data_arr('A.csv')
+# Import trainers explicitly
+from models.LSTM.trainer import Trainer as LSTMTrainer
+from models.CNN.trainer import CNNTrainer
 
-trainer = Trainer()
-trainer.train(1000)
+
+def main():
+
+    parser = argparse.ArgumentParser(
+        description="Train a stock prediction model"
+    )
+    parser.add_argument(
+        "--model",
+        choices=["lstm", "cnn"],
+        default="lstm",
+        help="Which model to train (default: lstm)",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=1000,
+        help="Number of training epochs",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="Batch size",
+    )
+
+    args = parser.parse_args()
+
+    if args.model == "lstm":
+        trainer = LSTMTrainer(batch_size=args.batch_size)
+    else:
+        trainer = CNNTrainer(batch_size=args.batch_size)
+
+    trainer.train(args.epochs)
+
+
+if __name__ == "__main__":
+    main()

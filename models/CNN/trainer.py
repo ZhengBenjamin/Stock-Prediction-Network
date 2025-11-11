@@ -1,6 +1,7 @@
 """CNN trainer for stock prediction (many-to-many)."""
 
 import torch
+import os
 from typing import Optional, Tuple
 from torch.utils.data import DataLoader
 
@@ -46,6 +47,11 @@ class CNNTrainer:
             dropout=dropout,
         ).to(self.device)
 
+        # Create checkpoints directory
+        self.checkpoint_dir = "checkpoints/cnn"
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        self.best_loss = float('inf')
+
     def train(self, epochs: Optional[int] = 1000):
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
@@ -66,7 +72,25 @@ class CNNTrainer:
 
                 running_loss += loss.item()
 
-            print(f"Epoch {epoch}, Loss: {running_loss/len(self.loader):.6f}")
+            avg_loss = running_loss / len(self.loader)
+            print(f"Epoch {epoch}, Loss: {avg_loss:.6f}")
+
+            # Save checkpoint if best loss
+            if avg_loss < self.best_loss:
+                self.best_loss = avg_loss
+                checkpoint_path = os.path.join(
+                    self.checkpoint_dir, "best_model.pt"
+                )
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state": self.model.state_dict(),
+                        "loss": avg_loss,
+                        "input_size": self.X.shape[2],
+                    },
+                    checkpoint_path,
+                )
+                print(f"Checkpoint saved to {checkpoint_path}")
 
     def _prepare_data(self) -> Tuple:
         data = self.preprocessor.get_normalized_data()

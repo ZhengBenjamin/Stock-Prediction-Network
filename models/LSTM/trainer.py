@@ -2,6 +2,7 @@
 
 import numpy as np
 import torch
+import os
 
 from .model import Model
 from .stock_dataloader import StockDataloader
@@ -43,14 +44,19 @@ class Trainer:
             self.X.shape[2], hidden_size, num_layers, dropout
         ).to(self.device)
 
+        # Create checkpoints directory
+        self.checkpoint_dir = "checkpoints/lstm"
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        self.best_loss = float('inf')
+
     def train(self, epochs: Optional[int] = 10000):
+
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         
         for epoch in range(epochs):
             self.model.train()
-            loss = 0
-
-            criterion = torch.nn.MSELoss()
-            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+            epoch_loss = 0
 
             for X_batch, y_batch in self.loader:
                 # Move batch data to the appropriate device
@@ -63,10 +69,27 @@ class Trainer:
                 loss.backward()
                 optimizer.step()
 
-                loss += loss.item()
-            
-            # if epoch % 100 == 0:
-            print(f"Epoch {epoch}, Loss: {loss/len(self.loader):.6f}")
+                epoch_loss += loss.item()
+
+            avg_loss = epoch_loss / len(self.loader)
+            print(f"Epoch {epoch}, Loss: {avg_loss:.6f}")
+
+            # Save checkpoint if best loss
+            if avg_loss < self.best_loss:
+                self.best_loss = avg_loss
+                checkpoint_path = os.path.join(
+                    self.checkpoint_dir, "best_model.pt"
+                )
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state": self.model.state_dict(),
+                        "loss": avg_loss,
+                        "input_size": self.X.shape[2],
+                    },
+                    checkpoint_path,
+                )
+                print(f"Checkpoint saved to {checkpoint_path}")
 
     def _prepare_data(self) -> Tuple[np.ndarray, np.ndarray]:
         """Prepare and normalize training data."""

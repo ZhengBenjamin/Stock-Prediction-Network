@@ -10,3 +10,7 @@ from models import *
 
 trainer = Trainer()
 trainer.train(1000)
+
+horizon = int(5) # pred days after last ex in sequence
+
+trainer.evaluate(horizon=horizon, stock_idx=0)

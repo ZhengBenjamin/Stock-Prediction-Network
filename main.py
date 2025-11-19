@@ -40,6 +40,12 @@ def main():
         default="AAPL",
         help="Stock symbol for prediction (predict mode only)",
     )
+    parser.add_argument(
+        "--cnn-type",
+        choices=["1d", "2d"],
+        default="1d",
+        help="Which CNN variant to use when --model cnn (default: 1d)",
+    )
 
     args = parser.parse_args()
 
@@ -47,10 +53,14 @@ def main():
         if args.model == "lstm":
             trainer = LSTMTrainer(batch_size=args.batch_size)
         else:
-            trainer = CNNTrainer(batch_size=args.batch_size)
+            trainer = CNNTrainer(
+                batch_size=args.batch_size, cnn_type=args.cnn_type
+            )
         trainer.train(args.epochs)
     else:
-        predictor = StockPredictor(model_type=args.model)
+        predictor = StockPredictor(
+            model_type=args.model, cnn_type=args.cnn_type
+        )
         pred = predictor.predict_next_step(args.stock)
         print(
             f"\nPredicted next close price for {args.stock}: "

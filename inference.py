@@ -17,6 +17,7 @@ class StockPredictor:
         self,
         model_type: str = "lstm",
         checkpoint_path: Optional[str] = None,
+        cnn_type: str = "1d",
     ):
         """Initialize the predictor.
 
@@ -31,7 +32,10 @@ class StockPredictor:
 
         # Determine checkpoint path
         if checkpoint_path is None:
-            checkpoint_path = f"checkpoints/{model_type}/best_model.pt"
+            if model_type == "cnn":
+                checkpoint_path = f"checkpoints/cnn_{cnn_type}/best_model.pt"
+            else:
+                checkpoint_path = f"checkpoints/{model_type}/best_model.pt"
 
         # Load checkpoint
         if not os.path.exists(checkpoint_path):
@@ -43,11 +47,18 @@ class StockPredictor:
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         input_size = checkpoint["input_size"]
 
-        # Initialize model
+        # Initialize model. Prefer cnn_type from checkpoint if provided.
         if model_type == "lstm":
             self.model = LSTMModel(input_size=input_size)
         elif model_type == "cnn":
-            self.model = CNNModel(input_size=input_size)
+            # checkpoint may contain cnn_type metadata
+            cnn_variant = checkpoint.get("cnn_type", cnn_type)
+            if cnn_variant == "2d":
+                from models.CNN.cnn_model_2d import CNN2DModel
+
+                self.model = CNN2DModel(input_size=input_size)
+            else:
+                self.model = CNNModel(input_size=input_size)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 

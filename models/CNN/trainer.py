@@ -25,6 +25,7 @@ class CNNTrainer:
         sequence_length: Optional[int] = 1000,
         batch_size: Optional[int] = 32,
         lr: Optional[float] = 1e-3,
+        cnn_type: str = "1d",
     ):
         self.preprocessor = StockPreprocessor(sequence_length=sequence_length)
         self.lr = lr
@@ -40,15 +41,29 @@ class CNNTrainer:
 
         # CNN expects input_size as number of features
         input_size = self.X.shape[2]
-        self.model = CNNModel(
-            input_size=input_size,
-            hidden_channels=hidden_channels,
-            kernel_size=kernel_size,
-            dropout=dropout,
-        ).to(self.device)
+        self.cnn_type = cnn_type
 
-        # Create checkpoints directory
-        self.checkpoint_dir = "checkpoints/cnn"
+        if self.cnn_type == "2d":
+            # import here to avoid circular imports
+            from models.CNN.cnn_model_2d import CNN2DModel
+
+            self.model = CNN2DModel(
+                input_size=input_size,
+                hidden_channels=hidden_channels,
+                kernel_time=kernel_size,
+                kernel_feat=kernel_size,
+                dropout=dropout,
+            ).to(self.device)
+        else:
+            self.model = CNNModel(
+                input_size=input_size,
+                hidden_channels=hidden_channels,
+                kernel_size=kernel_size,
+                dropout=dropout,
+            ).to(self.device)
+
+        # Create checkpoints directory (separate per cnn type)
+        self.checkpoint_dir = f"checkpoints/cnn_{self.cnn_type}"
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         self.best_loss = float('inf')
 
@@ -87,6 +102,7 @@ class CNNTrainer:
                         "model_state": self.model.state_dict(),
                         "loss": avg_loss,
                         "input_size": self.X.shape[2],
+                        "cnn_type": self.cnn_type,
                     },
                     checkpoint_path,
                 )

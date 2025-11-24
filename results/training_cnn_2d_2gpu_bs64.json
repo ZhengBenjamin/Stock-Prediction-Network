@@ -1,0 +1,32 @@
+{
+  "model": "cnn_2d",
+  "model_parameters": 37633,
+  "gpu_count": 2,
+  "gpu_model": "NVIDIA GeForce RTX 2080 Ti",
+  "gpu_memory_used_gb": 0.00028228759765625,
+  "batch_size_per_gpu": 64,
+  "total_batch_size": 128,
+  "epochs": 1000,
+  "learning_rate": 0.001,
+  "total_training_time": 75.08736324310303,
+  "avg_time_per_epoch": 0.07508736324310303,
+  "min_epoch_time": 0.07048511505126953,
+  "max_epoch_time": 0.4544107913970947,
+  "final_loss": 3.0795019370088994e-06,
+  "training_throughput_samples_per_sec": 5273.856783569686,
+  "speedup_vs_1gpu": 2.0376264845610152,
+  "efficiency_percent": 101.88132422805076,
+  "inference": {
+    "mean_latency_ms": 0.30752163380384445,
+    "std_latency_ms": 0.008368985111678176,
+    "min_latency_ms": 0.29990263283252716,
+    "max_latency_ms": 0.3514587879180908,
+    "p50_latency_ms": 0.30412524938583374,
+    "p95_latency_ms": 0.3188513219356537,
+    "p99_latency_ms": 0.34338936209678655,
+    "throughput_samples_per_sec": 9866.411438232808,
+    "batch_size": 32,
+    "num_runs": 100
+  },
+  "completed_at": "2025-11-21 19:09:45"
+}

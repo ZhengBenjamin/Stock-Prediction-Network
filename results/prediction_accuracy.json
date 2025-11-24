@@ -1,0 +1,62 @@
+[
+  {
+    "model": "lstm",
+    "gpu_count": 1,
+    "checkpoint": "checkpoints/lstm/best_model.pt",
+    "test_samples": 80,
+    "mse": 8.141707159349932e-08,
+    "mae": 0.00014511846323787765,
+    "rmse": 0.000285336768737398,
+    "r2_score": 0.9773830280352509,
+    "direction_accuracy": 97.46835443037975,
+    "correlation": 0.9907092969608307
+  },
+  {
+    "model": "cnn_1d",
+    "gpu_count": 1,
+    "checkpoint": "checkpoints/cnn_1d/best_model.pt",
+    "test_samples": 80,
+    "mse": 7.447856856159585e-08,
+    "mae": 0.0002313663018201488,
+    "rmse": 0.0002729076190977376,
+    "r2_score": 0.9767066790902664,
+    "direction_accuracy": 62.35813761433452,
+    "correlation": 0.9915105170714265
+  },
+  {
+    "model": "cnn_1d",
+    "gpu_count": 2,
+    "checkpoint": "checkpoints/cnn_1d/best_model_2gpu.pt",
+    "test_samples": 80,
+    "mse": 3.3029907548071133e-07,
+    "mae": 0.0004242098494587419,
+    "rmse": 0.0005747165174942437,
+    "r2_score": 0.8966983051641554,
+    "direction_accuracy": 62.679713209624744,
+    "correlation": 0.9681165591274512
+  },
+  {
+    "model": "cnn_2d",
+    "gpu_count": 1,
+    "checkpoint": "checkpoints/cnn_2d/best_model.pt",
+    "test_samples": 80,
+    "mse": 9.539818616412616e-08,
+    "mae": 0.0002512765283369283,
+    "rmse": 0.0003088659679604183,
+    "r2_score": 0.9701640269483734,
+    "direction_accuracy": 62.39317308775135,
+    "correlation": 0.9924203771258296
+  },
+  {
+    "model": "cnn_2d",
+    "gpu_count": 2,
+    "checkpoint": "checkpoints/cnn_2d/best_model_2gpu.pt",
+    "test_samples": 80,
+    "mse": 4.7245053163476e-07,
+    "mae": 0.0005840525894190443,
+    "rmse": 0.0006873503703605316,
+    "r2_score": 0.852240153645793,
+    "direction_accuracy": 62.73602022047323,
+    "correlation": 0.9632409103513506
+  }
+]

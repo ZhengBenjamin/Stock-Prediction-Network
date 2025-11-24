@@ -1,0 +1,14 @@
+{
+  "model": "lstm",
+  "gpu_count": 1,
+  "batch_size_per_gpu": 64,
+  "total_batch_size": 64,
+  "epochs": 1000,
+  "total_training_time": 76.0,
+  "avg_time_per_epoch": 0.076,
+  "final_loss": 0.000000,
+  "training_throughput_samples_per_sec": 5210.5,
+  "gpu_model": "NVIDIA GeForce RTX 2080 Ti",
+  "speedup_vs_1gpu": null,
+  "efficiency_percent": null
+}

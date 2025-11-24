@@ -1,0 +1,4 @@
+Model,1_GPU_Time_s,2_GPUs_Time_s,Speedup,Parallel_Efficiency_%,Inference_Throughput_samples_s
+LSTM,76.0,,,,
+CNN_1D,41.0,23.6,1.74,86.8,41336
+CNN_2D,153.0,75.1,2.04,101.9,9866

@@ -15,6 +15,8 @@ class StockPreprocessor:
         self.data_dir = data_dir
         self.sequence_length = sequence_length
         self.normalized_data = None
+        # Store per-feature scalers for denormalization
+        self.feature_scalers: List[MinMaxScaler] = []
         self._ensure_data()
 
     def get_normalized_data(self) -> np.ndarray:
@@ -58,13 +60,31 @@ class StockPreprocessor:
         normalized_data = np.zeros_like(stock_data)
         num_features = stock_data.shape[2]
 
+        # Normalize minmax sacler
+        self.feature_scalers = []
         for feature_idx in range(num_features):
             feature_vals = stock_data[:, :, feature_idx].reshape(-1, 1)
             scaler = MinMaxScaler()
-            normalized_feature = scaler.fit_transform(feature_vals).reshape(stock_data.shape[0], stock_data.shape[1])
+            normalized_feature = scaler.fit_transform(feature_vals).reshape(
+                stock_data.shape[0], stock_data.shape[1]
+            )
             normalized_data[:, :, feature_idx] = normalized_feature
+            self.feature_scalers.append(scaler)
 
         return normalized_data
+
+    def denormalize_close(self, values: np.ndarray) -> np.ndarray:
+        """Convert normalized close values back to original price scale.
+
+        Accepts (dim,) or (dim, 1), returns the same shape.
+        """
+        if not self.feature_scalers or len(self.feature_scalers) <= 4:
+            raise RuntimeError("Scalers are not fitted yet. Call get_normalized_data() first.")
+
+        original_shape = values.shape
+        vals = values.reshape(-1, 1)
+        inv = self.feature_scalers[4].inverse_transform(vals)
+        return inv.reshape(original_shape)
         
     def get_data_arr(self, file: str) -> Optional[np.ndarray]:
         """Takes file and converts to numpy array without timestamps, 

@@ -142,6 +142,68 @@ This allows direct interpretation of forecasted prices in currency units and fac
 
 \section{Experiments}
 
+
+To evaluate the performance and scalability of our StockNet models, we conducted a comprehensive series of experiments across different computational configurations. Our experimental design focuses on understanding how model training scales with varying hardware resources, comparing both GPU-accelerated and CPU-based training approaches. The experiments were executed on the Markov HPC cluster, utilizing SLURM workload manager for resource allocation and job scheduling.
+
+\subsection{Experimental Setup}
+
+Our experimental framework encompasses three distinct model architectures: the LSTM network described in Section 3.1, a 1D Convolutional Neural Network (CNN1D), and a 2D Convolutional Neural Network (CNN2D). For each architecture, we systematically varied the computational resources to investigate scaling behavior and training efficiency. The experimental configurations span single GPU training, multi-GPU distributed training with 2 and 4 GPUs, and CPU-only training for baseline comparison.
+
+All GPU experiments were conducted on the \texttt{markov\_gpu} partition with NVIDIA GPUs, allocating 8 CPU cores and 32GB of memory per job. Multi-GPU experiments utilized PyTorch's Distributed Data Parallel (DDP) framework to enable efficient parallel training across multiple devices. Each training run was configured for a maximum of 1000 epochs with early stopping criteria, using a batch size of 64 for single GPU experiments and scaled batch sizes for multi-GPU configurations to maintain computational efficiency.
+
+\subsection{SLURM Job Configurations}
+
+To manage the diverse experimental conditions, we developed a suite of SLURM batch scripts that automate the training process across different resource allocations. Each script follows a standardized template that specifies job parameters, loads required modules, activates the Python environment, and executes the training script with appropriate configuration flags. For example, our single GPU training script for the 1D CNN model includes:
+
+\begin{verbatim}
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+
+python main.py --mode train --model cnn 
+    --cnn_type 1d --epochs 1000 
+    --batch_size 64 --device cuda
+\end{verbatim}
+
+Multi-GPU configurations extend this template by requesting additional GPU resources (\texttt{--gres=gpu:N}) and invoking PyTorch's distributed launcher:
+
+\begin{verbatim}
+torchrun --nproc_per_node=N main.py 
+    --distributed ...
+\end{verbatim}
+
+where $N \in \{2, 4\}$ specifies the number of GPUs. This distributed setup partitions the dataset across available GPUs, with each device processing a subset of the batch in parallel. Gradient synchronization occurs at each optimization step through all-reduce operations, ensuring model consistency across workers.
+
+\subsection{CPU Training Experiments}
+
+In addition to GPU-accelerated training, we conducted CPU-only experiments to establish performance baselines and understand the computational advantages provided by GPU hardware. CPU training jobs were submitted to standard compute partitions without GPU allocation, utilizing higher core counts (16-32 cores) to leverage multi-threading capabilities. These experiments are particularly valuable for:
+
+\begin{enumerate}
+  \item Quantifying the speedup achieved through GPU acceleration
+  \item Assessing the feasibility of model training in resource-constrained environments
+  \item Identifying computational bottlenecks that benefit most from parallel processing
+\end{enumerate}
+
+CPU experiments used identical hyperparameters and dataset configurations as their GPU counterparts, differing only in the device specification (\texttt{--device cpu}). Training times and memory utilization were recorded for direct comparison with GPU results.
+
+\subsection{Experimental Metrics}
+
+For each experimental configuration, we collected comprehensive performance metrics including:
+
+\begin{itemize}
+  \item \textbf{Training Time}: Wall-clock time to complete the full training regimen
+  \item \textbf{Epoch Duration}: Average time per training epoch across all iterations
+  \item \textbf{GPU Utilization}: Device memory usage and compute utilization percentages
+  \item \textbf{Scaling Efficiency}: Speedup ratio when moving from 1 to $N$ GPUs, defined as $S(N) = \frac{T_1}{T_N}$ where $T_N$ is training time with $N$ GPUs
+  \item \textbf{Model Accuracy}: Mean squared error on validation set across training checkpoints
+\end{itemize}
+
+All experiments were logged systematically with job-specific output files (\texttt{logs/model\_Ngpu\_\%j.out}) containing training progress, loss curves, and resource utilization statistics. This logging infrastructure enables post-hoc analysis of convergence behavior and identification of optimal hardware configurations for each model architecture.
+
+The complete experimental suite comprises 13 distinct job configurations spanning the three model types, four GPU configurations (1, 2, 4 GPUs, and CPU), and includes additional retraining experiments for model refinement. This comprehensive approach allows us to make evidence-based recommendations for resource allocation when deploying stock prediction models on HPC infrastructure.
+
+
+
 \section{Results}
 
 

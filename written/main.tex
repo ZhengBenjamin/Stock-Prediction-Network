@@ -137,6 +137,44 @@ $$\hat{y}_{price} = \hat{y}_{norm} \times (x_{max} - x_{min}) + x_{min}$$
 This allows direct interpretation of forecasted prices in currency units and facilitates comparison with actual market values.
 
 \subsection{Convolutional Neural Network (CNN)}
+Convolutional Neural Networks (CNNs) provide an alternative to recurrent models for sequence modeling by exploiting local temporal structure with convolutional filters. In our work we implement two variants: a 1D temporal CNN that operates along the time axis and returns one prediction per timestep (many-to-many), and a 2D CNN that treats time and feature dimensions as two spatial axes to explicitly model cross-feature interactions at each time window. Both variants consume the normalized input sequences $X \in \mathbb{R}^{T\times F}$ (with $T=1000$ and $F=6$ features per time step) and produce a predicted normalized close price for each time step in the output sequence.
+
+\subsubsection{1D Convolutional Model}
+
+The 1D model applies temporal convolutional filters across the sequence for each feature channel. Intuitively, a 1D convolution with kernel size $k$ slides a filter over time and learns local temporal patterns such as short-term trends, local maxima/minima, or momentum that are predictive of the next close price. In our implementation the network expects inputs shaped as $(\text{batch}, T, F)$ which are permuted to $(\text{batch}, F, T)$ before feeding into PyTorch's Conv1d layers. The architecture is a small stack of Conv1d blocks with ReLU activations and dropout for regularization, followed by a $1\times1$ projection to produce a single scalar per time step. Formally, if $\mathbf{x}_{b,:,t}\in\mathbb{R}^F$ is the feature vector for batch index $b$ at time $t$, the network computes:
+$$
+\mathbf{h}_{b,:,t}^{(1)} = \text{ReLU}(W^{(1)} * \mathbf{x}_{b,:,t} + b^{(1)}),
+$$
+where $*$ denotes a 1D convolution over the temporal axis and subsequent layers further mix temporal context. The final projection yields $\hat{y}_{b,t}\in\mathbb{R}$ for each $t$.
+
+Key training and design choices for the 1D model:
+
+- Many-to-many prediction: the model outputs a sequence $\hat{Y}\in\mathbb{R}^{T\times 1}$ so that intermediate predictions can be used for sequence-level losses and diagnostics. This stabilizes learning relative to single-step forecasting in some regimes. \\
+- Loss and optimizer: Mean Squared Error (MSE) is used as the training objective and optimized with Adam ($\alpha=10^{-3}$), matching the LSTM's configuration to allow fair comparison. \\
+- Regularization: dropout is applied after each activation and the receptive field is controlled by kernel size and stacking depth. Padding is used to preserve sequence length so outputs align with inputs. \\
+- Checkpointing: the trainer saves the model state when validation (or training) loss improves, enabling early stopping and safe resumption of training.
+\\
+The 1D CNN is computationally efficient and benefits from parallelization on GPUs because convolutions are highly optimized. Its inductive bias favors temporal locality, making it especially effective at learning short-to-medium range temporal patterns with a small parameter count.
+
+\subsubsection{2D Convolutional Model}
+
+The 2D variant treats the sequence as a 2D image with axes time $\times$ features. Concretely, an input $(\text{batch}, T, F)$ is reshaped to $(\text{batch}, 1, T, F)$ and processed by Conv2d layers with kernels $(k_t, k_f)$ that span both temporal and feature neighborhoods. After several Conv2d blocks the network projects to a single channel and reduces the feature axis (for example by averaging) so that the final output shape is $(\text{batch}, T, 1)$.
+
+This design explicitly models interactions between features at local temporal windows, enabling the network to learn patterns such as joint movements of open/high/low/close/volume that are predictive of future close prices. The forward pass can be summarized as:
+$$
+\mathbf{Z} = \text{Conv2D}_{stack}(\text{reshape}(X)),\qquad \hat{Y}_{b,t} = \text{pool}_{f}(\mathbf{Z}_{b,1,t,:}),
+$$
+where $\text{pool}_{f}$ denotes the operation that collapses the feature axis (e.g., mean over features) after the final $1$-channel projection.
+
+Advantages and trade-offs of the 2D model:
+
+- Cross-feature coupling: 2D kernels can learn filters that respond to specific combinations of features (for instance, a high-volume up-tick pattern), which the 1D model can only approximate indirectly by combining per-feature channels. \\
+- Larger parameter and compute cost: Conv2d layers typically require more memory and compute than Conv1d for the same effective receptive field, especially when using larger feature kernels $k_f$. This increases GPU memory usage and may slow training for long sequences like $T=1000$. \\
+- Flexible receptive field: by tuning $(k_t, k_f)$ and stacking depth we can control the temporal and cross-feature scope of learned filters. Multi-scale kernels or separable convolutions are straightforward extensions to reduce cost while preserving expressivity.
+\\
+Both models are trained on the same normalized dataset and evaluated with identical metrics (MSE on held-out validation sequences) so that their statistical and computational trade-offs can be directly compared. In practice, the 1D model often trains faster and requires fewer parameters for comparable short-range forecasting accuracy, while the 2D model can outperform when cross-feature patterns are strong and worth the additional computational expense.
+
+Practical improvements to consider (low-risk extensions): dilated convolutions or residual blocks to increase effective temporal context without proportional parameter growth; depthwise separable convolutions to reduce cost of 2D filters; and multi-scale branches that combine short and long kernels to capture patterns at multiple horizons. These ideas are easy to prototype within the existing trainer and model modules and can yield robust gains for stock time-series, which exhibit structure at many temporal scales.
 
 \section{Parallelization Strategy}
 

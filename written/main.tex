@@ -34,6 +34,8 @@ be designed to capture nonlinear relationships and temporal dependencies within 
 \maketitle
 \section{Introduction}
 
+Financial markets exhibit complex, nonlinear dynamics with strong temporal dependencies, making accurate stock price prediction a challenging modeling problem. In this project we develop StockNet, a neural network framework that combines sequence models (LSTM) and convolutional architectures (1D and 2D CNNs) with high-performance GPU computing on the Markov cluster at CWRU. Our objective is to evaluate how different deep learning architectures perform on S\&P 500 stock data and to quantify the benefits of GPU acceleration and multi-GPU parallelization for both training time and predictive accuracy.
+
 \section{Datasets and Preprocessing}
 
 \subsection{Datasets}
@@ -178,16 +180,83 @@ Practical improvements to consider (low-risk extensions): dilated convolutions o
 
 \section{Parallelization Strategy}
 
-\section{Experiments}
+The central goal of StockNet is to exploit the GPU resources of the Markov cluster to accelerate training for all three architectures while preserving a unified codebase for single- and multi-GPU runs. The implementation separates model logic from HPC orchestration, uses PyTorch's Distributed Data Parallel (DDP) framework for intra-node multi-GPU training, and logs all runs in a reproducible way through structured checkpoints and results files. All GPU jobs are executed on the Markov GPU partition with NVIDIA GPUs, using the module 
+\texttt{PyTorch/2.1.2-foss-2023a-CUDA-12.1.1}. A project-specific Python virtual environment is created in storage space and activated at job start. SLURM scripts are stored in \texttt{slurm\_scripts/}, model checkpoints in \texttt{checkpoints/}, logs in \texttt{logs/}, and metrics and summaries in \texttt{results/}.
 
+\subsection{Single-GPU training pipeline}
+
+Single-GPU experiments for the LSTM, 1D CNN, and 2D CNN architectures are driven by a shared entry point \texttt{main.py}. This script provides a simple command-line interface that selects the model and training configuration while keeping optimization hyperparameters aligned. A typical single-GPU run for the 1D CNN model is launched with:
+\begin{verbatim}
+python main.py --mode train --model cnn 
+    --cnn_type 1d --epochs 1000 
+    --batch_size 64 --device cuda
+\end{verbatim}
+Internally, \texttt{main.py} constructs either an LSTMTrainer or a CNNTrainer and delegates the full training loop to these trainer classes.  Both trainers rely on a common preprocessing utility that loads the S\&P 500 dataset, enforces a minimum sequence length of \(T = 1000\) trading days, and applies feature-wise min–max normalization to obtain tensors \(X \in \mathbb{R}^{N \times T \times F}\) with aligned targets \(y\).
+
+On Markov, single-GPU runs are wrapped in dedicated SLURM scripts for each architecture. For example, we use separate scripts for the LSTM, CNN-1D, and CNN-2D models, each requesting one GPU, eight CPU cores, and 32\,GB of memory:
+\begin{verbatim}
+#SBATCH --partition=markov_gpu
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=02:00:00
+\end{verbatim}
+Each job logs metadata (hostname, job ID) as well as GPU type and memory capacity into the log directory. During training, the selected model is moved to \texttt{cuda} and optimized for up to 1000 epochs with batch size 64 and the Adam optimizer, using mean squared error as the loss. The best-performing weights are saved in model-specific checkpoint files and reused for evaluation and inference. These single-GPU runs provide both strong baselines and the reference timings \(T_1\) used in the empirical speedup calculations.
+
+\subsection{Multi-GPU distributed training with DDP}
+
+To scale training beyond a single device, multi-GPU data parallelism is implemented in a dedicated script that uses PyTorch's Distributed Data Parallel (DDP) API. The script launches one worker process per GPU via \texttt{torch.multiprocessing.spawn}, with each process identified by a rank \(0 \le r < \texttt{world\_size}\). The DDP environment is initialized by forming an \texttt{nccl} process group and binding each rank to a dedicated device:
+\begin{verbatim}
+dist.init_process_group(..., 
+    world_size=world_size, rank=rank)
+torch.cuda.set_device(rank)
+\end{verbatim}
+Each rank constructs its own preprocessing object and obtains the normalized dataset. The resulting tensors are wrapped into a custom distributed dataset and fed through a data loader that uses PyTorch's distributed sampler, so that each GPU receives a distinct shard of the data while global shuffling is preserved across epochs.
+
+For the model, each rank instantiates the chosen architecture (LSTM, CNN--1D, or CNN--2D), moves it to the local device, and wraps it in DDP:
+\begin{verbatim}
+model = DDP(model.to(rank), device_ids=[rank])
+\end{verbatim}
+Training then proceeds with the same mean squared error loss and Adam optimizer as in the single-GPU case. At every backward pass, DDP performs an all-reduce over gradients so that each replica maintains synchronized parameters. The script records per-epoch losses and wall-clock times, and on rank~0 additionally reports model size, effective batch size, and basic GPU memory usage. Because the Markov scheduler did not reliably provide four-GPU allocations for this project, multi-GPU experiments are restricted to two GPUs on a single node, using the one-GPU runs as baselines for speedup and efficiency computation.
+
+
+\subsection{SLURM orchestration and resource configuration}
+
+Multi-GPU jobs are orchestrated through SLURM batch scripts that extend the single-GPU template to request two GPUs and additional CPU and memory resources. A representative example is the script used for the 1D CNN model:
+\begin{verbatim}
+#SBATCH --partition=markov_gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=02:00:00
+
+python train_distributed.py \
+    --model cnn --cnn_type 1d \
+    --epochs 1000 --batch_size 64 \
+    --world_size 2
+\end{verbatim}
+An analogous script named \verb|train_cnn2d_2gpu.slurm| controls the 2D CNN experiments, differing only in the value of the cnntype2D flag.
+Each job records GPU names and total memory, followed by detailed training output such as loss curves, epoch times, and configuration flags in a dedicated log file. The LSTM architecture is evaluated only in the single-GPU regime, since its training time on one GPU is already modest and two-GPU configurations did not provide a clear advantage under Markov constraints.
+
+\subsection{Metrics, checkpointing, and inference benchmarking}
+
+To support the analysis in the Experiments and Results sections, the training scripts export structured metrics as JSON and CSV summaries under \texttt{results/}. For each model and GPU configuration, these summaries record total training time, per-epoch duration, final loss, effective batch size, and training throughput in samples per second. Using the 1-GPU runs as reference, we compute empirical speedup \(S(N) = T_1 / T_N\) and parallel efficiency \(S(N)/N\). For example, the CNN-1D training time decreases from 41.0\,s on one GPU to 23.6\,s on two GPUs, yielding a 1.74\(\times\) speedup and 86.8\,\% efficiency, while CNN-2D improves from 153.0\,s to 75.1\,s with a 2.04\(\times\) speedup and 101.9\,\% efficiency.
+
+After training completes, \texttt{train\_distributed.py} also performs an inference benchmark on rank~0. Following a warmup phase, the script measures forward-pass latency for repeated single-sample and batched inputs and reports mean and percentile latencies together with throughput in samples per second. These statistics are stored alongside the training metrics and are used in the results section to characterize deployment-time behavior. In particular, the measured inference throughputs for the CNN-1D and CNN-2D models reach approximately 41\,336 and 9\,866 samples per second, respectively, on Markov GPUs.
+
+\section{Experiments}
 
 To evaluate the performance and scalability of our StockNet models, we conducted a comprehensive series of experiments across different computational configurations. Our experimental design focuses on understanding how model training scales with varying hardware resources, comparing both GPU-accelerated and CPU-based training approaches. The experiments were executed on the Markov HPC cluster, utilizing SLURM workload manager for resource allocation and job scheduling.
 
 \subsection{Experimental Setup}
 
-Our experimental framework encompasses three distinct model architectures: the LSTM network described in Section 3.1, a 1D Convolutional Neural Network (CNN1D), and a 2D Convolutional Neural Network (CNN2D). For each architecture, we systematically varied the computational resources to investigate scaling behavior and training efficiency. The experimental configurations span single GPU training, multi-GPU distributed training with 2 and 4 GPUs, and CPU-only training for baseline comparison.
+Our experimental framework encompasses three distinct model architectures: the LSTM network described in Section 3.1, a 1D Convolutional Neural Network (CNN1D), and a 2D Convolutional Neural Network (CNN2D). For each architecture, we systematically varied the computational resources to investigate scaling behavior and training efficiency. The experimental configurations span single GPU training for all three architectures and multi-GPU distributed training with two GPUs for the CNN models, while separate CPU-only baselines are run as part of the overall study.
 
 All GPU experiments were conducted on the \texttt{markov\_gpu} partition with NVIDIA GPUs, allocating 8 CPU cores and 32GB of memory per job. Multi-GPU experiments utilized PyTorch's Distributed Data Parallel (DDP) framework to enable efficient parallel training across multiple devices. Each training run was configured for a maximum of 1000 epochs with early stopping criteria, using a batch size of 64 for single GPU experiments and scaled batch sizes for multi-GPU configurations to maintain computational efficiency.
+
+For each configuration, the training scripts record wall-clock time, per-epoch duration, and model accuracy metrics in structured JSON and CSV files under the \texttt{results/} directory. These summaries are later aggregated into performance tables that report training time, empirical speedup, parallel efficiency, and prediction quality for each architecture and GPU count.
 
 \subsection{SLURM Job Configurations}
 
@@ -238,12 +307,59 @@ For each experimental configuration, we collected comprehensive performance metr
 
 All experiments were logged systematically with job-specific output files (\texttt{logs/model\_Ngpu\_\%j.out}) containing training progress, loss curves, and resource utilization statistics. This logging infrastructure enables post-hoc analysis of convergence behavior and identification of optimal hardware configurations for each model architecture.
 
-The complete experimental suite comprises 13 distinct job configurations spanning the three model types, four GPU configurations (1, 2, 4 GPUs, and CPU), and includes additional retraining experiments for model refinement. This comprehensive approach allows us to make evidence-based recommendations for resource allocation when deploying stock prediction models on HPC infrastructure.
-
-
+The complete experimental suite comprises 13 distinct job configurations spanning the three model types, the available GPU configurations (one and two GPUs), and CPU baselines, together with additional retraining runs for model refinement. This comprehensive approach allows us to make evidence-based recommendations for resource allocation when deploying stock prediction models on HPC infrastructure.
 
 \section{Results}
 
+This section summarizes the empirical impact of GPU acceleration and multi-GPU training on both runtime and predictive performance for the LSTM, CNN--1D, and CNN--2D architectures. We first report end-to-end training time and accuracy metrics for each model–GPU configuration, and then discuss observed speedups, parallel efficiency, and inference throughput on the Markov cluster.
+
+\subsection{Training time and accuracy}
+
+Table~\ref{tab:training-results} reports the observed training times and prediction quality for each architecture and GPU count. The metrics are computed on a held-out test split of the S\&P 500 dataset and include the coefficient of determination $R^2$, root mean squared error (RMSE), mean absolute error (MAE), and directional accuracy (percentage of days for which the sign of the next-day return is predicted correctly).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Model & GPUs & Time & $R^2$ & RMSE & MAE & Dir.\ Acc.\ \\
+\midrule
+LSTM      & 1 & 76.0  & 0.9774 & 0.000285 & 0.000145 & 97.5 \\
+CNN 1D    & 1 & 41.0  & 0.9767 & 0.000273 & 0.000231 & 62.4 \\
+CNN 1D    & 2 & 23.6  & 0.8967 & 0.000575 & 0.000424 & 62.7 \\
+CNN 2D    & 1 & 153.0 & 0.9702 & 0.000309 & 0.000251 & 62.4 \\
+CNN 2D    & 2 & 75.1  & 0.8522 & 0.000687 & 0.000584 & 62.7 \\
+\bottomrule
+\end{tabular}
+\caption{Training time (seconds) and prediction quality for each architecture and GPU configuration. Dir.\ Acc.\ is the percentage of test days for which the model correctly predicts the sign of the next-day return.}
+\label{tab:training-results}
+\end{table}
+
+These results show that all three architectures achieve strong predictive performance in the single-GPU regime, with $R^2$ values around 0.97 and very small RMSE and MAE. The LSTM achieves the highest directional accuracy at 97.5\%, indicating that it almost always predicts the correct direction of the next-day move on the test set. The CNN models maintain directional accuracy around 62--63\%, which still exceeds the 50\% random baseline and suggests that convolutional architectures capture useful short-term patterns in the normalized price sequences.
+
+Moving from one to two GPUs substantially reduces training time for the CNN architectures, but at the cost of a moderate drop in predictive accuracy. For CNN--1D, training time decreases from 41.0\,s to 23.6\,s when scaling from one to two GPUs, while $R^2$ falls from 0.9767 to 0.8967 and both RMSE and MAE roughly double. A similar pattern appears for CNN--2D, where training time falls from 153.0\,s to 75.1\,s but $R^2$ decreases from 0.9702 to 0.8522 and the error metrics increase. These trends indicate that aggressive parallelism shortens wall-clock training but may require additional regularization or hyperparameter tuning to fully preserve single-GPU accuracy.
+
+\subsection{Speedup and inference performance}
+
+The aggregated GPU performance metrics provide a more detailed view of scaling efficiency. For the CNN--1D model, moving from one to two GPUs yields a 1.74$\times$ speedup relative to the single-GPU baseline, corresponding to a parallel efficiency of 86.8\,\%. The CNN--2D model achieves a 2.04$\times$ speedup with two GPUs, and a measured efficiency of 101.9\,\%, which reflects better utilization of compute resources when the heavier 2D convolutional layers are distributed across devices. These speedups confirm that the DDP-based parallelization strategy effectively reduces training time for convolutional architectures on Markov.
+
+Beyond training, the distributed script performs an inference benchmark on the final models to evaluate deployment-time throughput. On Markov GPUs, the CNN--1D model processes approximately 41\,336 samples per second, while the CNN--2D model reaches around 9\,866 samples per second under the batched benchmark configuration. Taken together with the accuracy results, these numbers indicate that the GPU-accelerated StockNet models not only train efficiently on the cluster but also support high-throughput prediction, making them suitable for large-scale backtesting or real-time screening workloads.
+
+\section{Discussion and Conclusion}
+
+\subsection{Summary of findings}
+
+\subsection{Limitations}
+
+\subsection{Future work}
+
+\section{References}
+
+[1] PyTorch Documentation. ``Distributed data parallel.'' 
+Available at \url{https://pytorch.org/docs}.
+
+[2] Kaggle. ``S\&P 500 stock data.'' 
+Available at \url{https://www.kaggle.com/}.
 
 \end{document}
 \endinput

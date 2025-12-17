@@ -1,8 +1,5 @@
 \documentclass[sigconf]{acmart}
-\usepackage{fvextra}
-\EnableUnicodeTrue
 
-\usepackage{graphicx}
 
 \setcopyright{none}
 \settopmatter{printacmref=false, printccs=false, printfolios=false}
@@ -13,6 +10,8 @@
 \acmConference{}
 \acmBooktitle{}
 \fancyhead{}
+\usepackage{graphicx}
+\usepackage{float}
 
 \begin{document}
 
@@ -330,6 +329,7 @@ Model & Device & GPUs & Time (s) & Time (min) & $R^2$ & RMSE & MAE & Dir.\ Acc.\
 \midrule
 LSTM      & CPU & 0 & 5,515 & 91.9 & 0.9774 & 0.000285 & 0.000145 & 97.5 \\
 LSTM      & GPU & 1 & 76.0  & 1.3  & 0.9774 & 0.000285 & 0.000145 & 97.5 \\
+LSTM      & GPU & 2 & 36.7  & 0.6  & 0.9858 & 0.001882 & 0.001211 & 98.7 \\
 CNN 1D    & CPU & 0 & 599   & 10.0 & 0.9767 & 0.000273 & 0.000231 & 62.4 \\
 CNN 1D    & GPU & 1 & 41.0  & 0.7  & 0.9767 & 0.000273 & 0.000231 & 62.4 \\
 CNN 1D    & GPU & 2 & 23.6  & 0.4  & 0.8967 & 0.000575 & 0.000424 & 62.7 \\
@@ -350,10 +350,9 @@ The inclusion of CPU training baselines reveals the dramatic computational advan
   \item \textbf{CNN 2D}: 24.1$\times$ speedup (3,680s $\rightarrow$ 153s), reducing training time from 61.3 minutes to 2.6 minutes
 \end{itemize}
 
-
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.95\linewidth]{gpu.png}
+    \includegraphics[width=0.95\linewidth]{images/gpu.png}
     \caption{GPU acceleration factors when moving from CPU to a single GPU for each architecture. The LSTM benefits most from GPU offloading, followed by the CNN--2D and CNN--1D models.}
     \label{fig:cpu-gpu-speedup}
 \end{figure}
@@ -368,35 +367,61 @@ Moving from one to two GPUs substantially reduces training time for the CNN arch
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.95\linewidth]{t.png}
+    \includegraphics[width=0.95\linewidth]{images/training_time.png}
     \caption{Training time comparison for LSTM, CNN--1D, and CNN--2D on CPU and GPU (log scale). GPU configurations dramatically reduce wall-clock time relative to CPU baselines across all architectures.}
-    \label{fig:cpu-gpu-log}
+    \label{fig:cpu-gpu-speedup}
 \end{figure}
 
-The aggregated GPU performance metrics provide a more detailed view of scaling efficiency. For the CNN--1D model, moving from one to two GPUs yields a 1.74$\times$ speedup relative to the single-GPU baseline, corresponding to a parallel efficiency of 86.8\,\%. The CNN--2D model achieves a 2.04$\times$ speedup with two GPUs, and a measured efficiency of 101.9\,\%, which reflects better utilization of compute resources when the heavier 2D convolutional layers are distributed across devices. These speedups confirm that the DDP-based parallelization strategy effectively reduces training time for convolutional architectures on Markov.
+The aggregated GPU performance metrics provide a more detailed view of scaling efficiency. As illustrated in Figure~\ref{fig:speedup}, the CNN--1D model achieves a 1.74$\times$ speedup when moving from one to two GPUs, corresponding to a parallel efficiency of 86.8\,\%. The CNN--2D model scales even more effectively, reaching a 2.04$\times$ speedup and an efficiency of 101.9\,\%, reflecting improved utilization of compute resources when distributing heavier convolutional layers across devices. The LSTM architecture exhibits the strongest scaling behavior overall, with a measured speedup slightly above 2.04, at 2.07$\times$. These results confirm that the DDP-based parallelization strategy effectively reduces training time for all architectures on the Markov cluster.
 
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.95\linewidth]{training_time.png}
+    \includegraphics[width=0.95\linewidth]{images/training_comparison.png}
     \caption{Training time for each architecture and GPU configuration. Multi-GPU CNN models achieve significantly lower wall-clock time compared to their single-GPU counterparts.}
-    \label{fig:train-time-bar}
+    \label{fig:cpu-gpu-speedup}
 \end{figure}
 
-Beyond training, the distributed script performs an inference benchmark on the final models to evaluate deployment-time throughput. On Markov GPUs, the CNN--1D model processes approximately 41\,336 samples per second, while the CNN--2D model reaches around 9\,866 samples per second under the batched benchmark configuration. Taken together with the accuracy results, these numbers indicate that the GPU-accelerated StockNet models not only train efficiently on the cluster but also support high-throughput prediction, making them suitable for large-scale backtesting or real-time screening workloads.
+Beyond training, the distributed script performs an inference benchmark on the final models to evaluate deployment-time throughput. As shown in Figure~\ref{fig:inference}, the CNN--1D model processes approximately 41{,}336 samples per second, while the CNN--2D model reaches around 9{,}866 samples per second under the batched benchmark configuration. The LSTM model achieves a throughput of 17{,}110 samples per second, offering a strong balance between accuracy and speed. These results confirm that the GPU-accelerated StockNet models not only train efficiently on the cluster but also support high-throughput prediction, making them suitable for large-scale backtesting or real-time screening workloads.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.5\textwidth]{images/inference.png}
+\caption{Inference throughput (samples/sec) for each model on 1 GPU and 2 GPUs. CNN--1D achieves the highest throughput overall, while LSTM offers a strong accuracy–throughput balance.}
+\label{fig:inference}
+\end{figure}
+
 
 \section{Discussion and Conclusion}
 
 \subsection{Summary of findings}
 
-This work develops StockNet, a GPU-accelerated framework for stock return prediction that combines LSTM, 1D CNN, and 2D CNN architectures with a reproducible SLURM-based training pipeline on the Markov cluster. Across all three models, moving from CPU to single-GPU training yields large reductions in wall-clock time while preserving predictive performance, with $R^2$ scores near 0.97 and stable directional accuracies on S\&P 500 data. Multi-GPU data parallelism with DDP further shortens training time for the convolutional models, achieving speedups up to 2.04$\times$ on two GPUs relative to the single-GPU baselines.
+Across all of our tested models (LSTM, CNN--1D, and CNN--2D), GPU acceleration proved to significantly improve both the training speed and inference throughput of all our tested models. CPU-only training, even with 32 Xeon cores, resulted in substantially long runtimes for the LSTM and CNN architectures; confirming that modern neural networks rely heavily on a large amount of computing resources in order to thrive. In contrast, single-GPU training massively reduced wall-clock time by up to two orders of magnitude while preserving the CPU models' predictive accuracy across all models.
+
+The LSTM architecture consistently achieved the strongest predictive performance, with $R^2$ values near 0.98 and directional accuracy above 97\% between the CPU, single-GPU, and multi-GPU configurations. CNN--1D and CNN--2D models also performed well on single GPUs, but exhibited reduced accuracy when they were trained with two GPUs.
+
+In terms of scalability, CNN--2D and LSTM demonstrated near-linear speedups when moving from one GPU to two GPUs, achieving improved efficiencies of 101.9\% and 103.5\%, respectively. CNN--1D scaled slightly worse at 86.8\%, likely due to its smaller computational footprint and lower arithmetic intensity. Our inference benchmarking also revealed that CNN--1D achieved the highest throughput (41{,}336 samples/sec), making it the best suited for real-time usage; while LSTM offers the best accuracy for more precise predictive modeling.
+
+Overall, our results demonstrate that GPU acceleration and parallelism are indispensable tools for the training of neural networks, allowing for significantly better training and performance for very little tradeoff.
 
 \subsection{Limitations}
 
-The current work focuses on historical S\&P 500 price data with fixed-length windows and does not incorporate transaction costs, slippage, or portfolio-level constraints, so the reported gains reflect predictive accuracy rather than realized trading performance. In addition, the multi-GPU experiments are restricted to two GPUs on a single node under Markov scheduling constraints, and the observed accuracy degradation for 2-GPU CNN training suggests that more extensive hyperparameter tuning and regularization were not fully explored. Finally, StockNet is evaluated in a single-market setting and may require additional adaptation to generalize to other asset classes or higher-frequency data.
+While the experimental results clearly display the benefits of GPU acceleration, there are several limitations to be addressed.
+
+First, the current work focuses on historical S\&P 500 price data with fixed-length windows while failing to incorporate any transaction costs, slippage, or portfolio-level constraints. This causes the reported gains to reflect predictive accuracy rather than actual, realized trading performance. 
+
+Additionally, the multi-GPU experiments we performed were restricted to two GPUs on a single node under Markov scheduling constraints, and the observed accuracy degradation for 2-GPU CNN training suggests that more extensive hyperparameter tuning and regularization were not fully explored. 
+
+Finally, the multi-GPU experiments used hyperparameters that were inherited from the single-GPU configuration. Because distributed training effectively increases the batch size, additional tuning (learning rate scaling, gradient clipping, additional regularization) may be required to fully make use of the additional GPU. 
 
 \subsection{Future work}
 
-Future work includes extending StockNet with more expressive sequence models such as Transformers or temporal convolutional networks, and systematically tuning optimization and regularization strategies to close the accuracy gap between single- and multi-GPU CNN training. On the systems side, running larger-scale experiments with more GPUs and multi-node DDP would provide a clearer picture of strong and weak scaling behavior, while integrating richer features (fundamental signals, macro indicators, or news embeddings) could improve predictive power and enable more realistic backtesting of trading strategies.
+Possible future work on this project includes extending StockNet with more expressive sequence models such as Transformers or temporal convolutional networks, and systematically tuning optimization and regularization strategies to close the accuracy gap between single- and multi-GPU CNN training. 
+
+On the systems side, running larger-scale experiments with more GPUs and multi-node DDP would provide a clearer picture of strong and weak scaling behavior, while integrating richer features (fundamental signals, macro indicators, or news embeddings) could improve predictive power and enable more realistic backtesting of trading strategies.
+
+It is also important to note the performance of the models  at higher GPU counts may be improved with additional generalization and more specialized hyperparameter tunings.
+
+Finally, additional data to the models’ datbase can also prove to be extremely effective, such as by including transaction costs, slippage, portfolio-level constraints, or even simply more stock market data to further better understand the market fluctuations.
 
 \section{References}
 
